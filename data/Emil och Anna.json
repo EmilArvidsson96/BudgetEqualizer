@@ -1,0 +1,48 @@
+{
+  "months": {
+    "2026-03": {
+      "emil": {
+        "lon": "51523",
+        "ovrigInkomst": "0",
+        "ovrigInkomstKommentar": "",
+        "skaDras": "58388",
+        "sparBuffert": "6000",
+        "sparResa": "2000",
+        "sparPension": "",
+        "sparKapital": "",
+        "lanatFranBuffert": "13000",
+        "kvarPaDispenser": "1545"
+      },
+      "anna": {
+        "lon": "31142",
+        "ovrigInkomst": "0",
+        "ovrigInkomstKommentar": "",
+        "skaDras": "15384",
+        "sparBuffert": "6000",
+        "sparResa": "2000",
+        "sparPension": "",
+        "sparKapital": "",
+        "lanatFranBuffert": "9700",
+        "kvarPaDispenser": "2714"
+      },
+      "bufferEmilOverride": null,
+      "bufferAnnaOverride": null
+    }
+  },
+  "settings": {
+    "nameEmil": "Emil",
+    "nameAnna": "Anna",
+    "bufferMalEmil": 84000,
+    "bufferMalAnna": 55440,
+    "initialBufferEmil": 41251,
+    "initialBufferAnna": 47597
+  },
+  "instructions": [
+    "Lägg in alla swishförfrågningar och se till att månaden är kvitt",
+    "Lägg in alla fakturor och kostnader under \"Ska dras\"",
+    "Fyll i sparande (buffert, resa, pension, kapital) under respektive person",
+    "Fyll i lånat från buffert och kvar på dispenser om det förekommer",
+    "Kontrollera utjämningsresultatet och swisha beloppet",
+    "Återför eventuella pengar till buffert"
+  ]
+}
