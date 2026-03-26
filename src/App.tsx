@@ -1,0 +1,250 @@
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { DEFAULT_MONTH } from './types'
+import { useStorage } from './hooks/useStorage'
+import { currentMonthKey, displayedMonths } from './utils/months'
+import {
+  calcKvar,
+  calcEgenkonsumtion,
+  calcConsumptionBreakdown,
+  prevBufferFor,
+  calcNewBuffer,
+} from './utils/calculations'
+import {
+  buildApi,
+  getGitHubConfig,
+  setGitHubConfig,
+  clearGitHubConfig,
+  DataApi,
+  DatasetMeta,
+} from './utils/dataApi'
+import { withDefaults, loadData } from './utils/storage'
+import { MonthNav } from './components/MonthNav'
+import { PersonCard } from './components/PersonCard'
+import { ResultCard } from './components/ResultCard'
+import { BufferCard } from './components/BufferCard'
+import { ConsumptionChart } from './components/ConsumptionChart'
+import { SettingsPanel } from './components/SettingsPanel'
+import { InstructionsPanel } from './components/InstructionsPanel'
+import { DatasetPanel } from './components/DatasetPanel'
+import { GitHubSetup } from './components/GitHubSetup'
+
+const LAST_DATASET_KEY = 'budget-last-dataset'
+const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+
+export default function App() {
+  // GitHub config — read once at mount (page reloads on change)
+  const [{ repo: ghRepo, token: ghToken }] = useState(getGitHubConfig)
+  const isGitHub = !!(ghRepo && ghToken)
+  const needsSetup = !isLocal && !isGitHub
+
+  const [api] = useState<DataApi>(() => buildApi().api)
+
+  const [loading, setLoading] = useState(!needsSetup)
+  const [datasets, setDatasets] = useState<DatasetMeta[]>([])
+  const [currentName, setCurrentName] = useState('')
+  const [activeMonth, setActiveMonth] = useState(currentMonthKey)
+
+  const currentNameRef = useRef('')
+  useEffect(() => { currentNameRef.current = currentName }, [currentName])
+
+  // GitHub: longer debounce to avoid commit spam; local: snappy 300ms
+  const saveDelay = isGitHub ? 5000 : 300
+
+  const handleSave = useCallback(async (d: Parameters<typeof api.saveDataset>[1]) => {
+    const name = currentNameRef.current
+    if (name) await api.saveDataset(name, d)
+  }, [api])
+
+  const { data, setPersonData, setBufferOverride, setSettings, setInstructions, replaceData } =
+    useStorage(withDefaults({}), handleSave, saveDelay)
+
+  // Save immediately when page goes to background (critical for mobile)
+  const dataRef = useRef(data)
+  useEffect(() => { dataRef.current = data }, [data])
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === 'hidden' && currentNameRef.current) {
+        api.saveDataset(currentNameRef.current, dataRef.current)
+      }
+    }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [api])
+
+  // ── Bootstrap ────────────────────────────────────────────────────────────────
+  const initApp = useCallback(async () => {
+    setLoading(true)
+    let list = await api.listDatasets()
+
+    if (list.length === 0) {
+      // First run: migrate localStorage data (if any)
+      const legacy = loadData()
+      const defaultName =
+        legacy.settings.nameEmil && legacy.settings.nameAnna
+          ? `${legacy.settings.nameEmil} och ${legacy.settings.nameAnna}`
+          : 'Min budget'
+      await api.saveDataset(defaultName, legacy)
+      list = await api.listDatasets()
+    }
+
+    const lastUsed = localStorage.getItem(LAST_DATASET_KEY) ?? ''
+    const activeName = list.find((d) => d.name === lastUsed) ? lastUsed : list[0].name
+
+    const loaded = await api.loadDataset(activeName)
+    replaceData(withDefaults(loaded ?? {}))
+    setCurrentName(activeName)
+    setDatasets(list)
+    setLoading(false)
+  }, [api, replaceData])
+
+  useEffect(() => {
+    if (!needsSetup) initApp()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refreshDatasets = useCallback(async () => {
+    setDatasets(await api.listDatasets())
+  }, [api])
+
+  // ── Dataset operations ───────────────────────────────────────────────────────
+  const switchDataset = useCallback(async (name: string) => {
+    await api.saveDataset(currentNameRef.current, data)
+    const loaded = await api.loadDataset(name)
+    replaceData(withDefaults(loaded ?? {}))
+    setCurrentName(name)
+    localStorage.setItem(LAST_DATASET_KEY, name)
+    await refreshDatasets()
+  }, [api, data, replaceData, refreshDatasets])
+
+  const createDataset = useCallback(async (name: string) => {
+    await api.saveDataset(currentNameRef.current, data)
+    const empty = withDefaults({})
+    await api.saveDataset(name, empty)
+    replaceData(empty)
+    setCurrentName(name)
+    localStorage.setItem(LAST_DATASET_KEY, name)
+    await refreshDatasets()
+  }, [api, data, replaceData, refreshDatasets])
+
+  const handleDelete = useCallback(async (name: string) => {
+    await api.deleteDataset(name)
+    const list = await api.listDatasets()
+    setDatasets(list)
+    if (name === currentNameRef.current && list.length > 0) {
+      const loaded = await api.loadDataset(list[0].name)
+      replaceData(withDefaults(loaded ?? {}))
+      setCurrentName(list[0].name)
+      localStorage.setItem(LAST_DATASET_KEY, list[0].name)
+    }
+  }, [api, replaceData])
+
+  const handleImport = useCallback(async (name: string, importedData: ReturnType<typeof withDefaults>) => {
+    await api.saveDataset(name, importedData)
+    replaceData(importedData)
+    setCurrentName(name)
+    localStorage.setItem(LAST_DATASET_KEY, name)
+    await refreshDatasets()
+  }, [api, replaceData, refreshDatasets])
+
+  // ── GitHub config changes ────────────────────────────────────────────────────
+  const handleGitHubChange = (repo: string, token: string) => {
+    setGitHubConfig(repo, token)
+    window.location.reload()
+  }
+  const handleGitHubDisconnect = () => {
+    clearGitHubConfig()
+    window.location.reload()
+  }
+
+  // ── Calculations ─────────────────────────────────────────────────────────────
+  const month = data.months[activeMonth] ?? DEFAULT_MONTH
+  const months = displayedMonths(data.months, activeMonth)
+  const sortedMonths = Object.keys(data.months).sort()
+  const prevMonthKey = sortedMonths.filter((k) => k < activeMonth).slice(-1)[0]
+  const prevMonthData = prevMonthKey ? data.months[prevMonthKey] : null
+
+  const emilKvar = calcKvar(month.emil)
+  const annaKvar = calcKvar(month.anna)
+  const egenkonsumtion = calcEgenkonsumtion(month, prevMonthData ?? null)
+  const consumption = calcConsumptionBreakdown(month, emilKvar, annaKvar, egenkonsumtion)
+
+  const autoPrevBuffer = prevBufferFor(activeMonth, data)
+  const prevBuffer = {
+    bufferEmil: month.bufferEmilOverride !== null ? month.bufferEmilOverride : autoPrevBuffer.bufferEmil,
+    bufferAnna: month.bufferAnnaOverride !== null ? month.bufferAnnaOverride : autoPrevBuffer.bufferAnna,
+  }
+  const newBuffer = calcNewBuffer(month, prevBuffer)
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+  if (needsSetup) {
+    return <GitHubSetup onConnect={handleGitHubChange} />
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-sm text-gray-400">Laddar…</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <MonthNav months={months} active={activeMonth} onSelect={setActiveMonth} />
+
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+        <DatasetPanel
+          datasets={datasets}
+          currentName={currentName}
+          currentData={data}
+          onSwitch={switchDataset}
+          onCreate={createDataset}
+          onDelete={handleDelete}
+          onImport={handleImport}
+        />
+
+        <InstructionsPanel instructions={data.instructions} onChange={setInstructions} />
+
+        <div className="grid grid-cols-2 gap-3">
+          <PersonCard
+            name={data.settings.nameEmil}
+            data={month.emil}
+            onChange={(p) => setPersonData(activeMonth, 'emil', p)}
+          />
+          <PersonCard
+            name={data.settings.nameAnna}
+            data={month.anna}
+            onChange={(p) => setPersonData(activeMonth, 'anna', p)}
+          />
+        </div>
+
+        <ResultCard
+          emilKvar={emilKvar}
+          annaKvar={annaKvar}
+          nameEmil={data.settings.nameEmil}
+          nameAnna={data.settings.nameAnna}
+        />
+
+        <BufferCard
+          prevBuffer={prevBuffer}
+          newBuffer={newBuffer}
+          settings={data.settings}
+          month={month}
+          nameEmil={data.settings.nameEmil}
+          nameAnna={data.settings.nameAnna}
+          onOverride={(e, a) => setBufferOverride(activeMonth, e, a)}
+        />
+
+        <ConsumptionChart {...consumption} />
+
+        <SettingsPanel
+          settings={data.settings}
+          onChange={setSettings}
+          githubRepo={ghRepo}
+          githubToken={ghToken}
+          onGitHubChange={handleGitHubChange}
+          onGitHubDisconnect={isLocal ? handleGitHubDisconnect : undefined}
+        />
+      </div>
+    </div>
+  )
+}
