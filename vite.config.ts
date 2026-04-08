@@ -71,6 +71,8 @@ function dataApiMiddleware(req: any, res: any, next: any) {
 }
 
 export default defineConfig({
+  // GitHub Pages serves from /BudgetEqualizer/ — only applied in CI builds
+  base: process.env.CI ? '/BudgetEqualizer/' : '/',
   plugins: [
     react(),
     {
