@@ -10,7 +10,7 @@ import {
   calcNewBuffer,
 } from './utils/calculations'
 import { buildApi, DataApi, DatasetMeta } from './utils/dataApi'
-import { isAuthSetup, getLegacyConfig } from './utils/authStore'
+import { isAuthSetup, getLegacyConfig, clearAuth } from './utils/authStore'
 import { withDefaults, loadData } from './utils/storage'
 import { MonthNav } from './components/MonthNav'
 import { PersonCard } from './components/PersonCard'
@@ -267,9 +267,9 @@ function BudgetApp({ repo, token }: { repo: string; token: string }) {
         <SettingsPanel
           settings={data.settings}
           onChange={setSettings}
-          githubRepo={isLocal ? repo : undefined}
-          githubToken={isLocal ? token : undefined}
+          githubRepo={repo}
           onGitHubDisconnect={isLocal ? () => { window.location.reload() } : undefined}
+          onResetAuth={!isLocal ? () => { clearAuth(); window.location.reload() } : undefined}
         />
       </div>
     </div>

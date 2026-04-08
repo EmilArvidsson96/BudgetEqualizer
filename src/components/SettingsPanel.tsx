@@ -97,6 +97,7 @@ interface Props {
   githubToken?: string
   onGitHubChange?: (repo: string, token: string) => void
   onGitHubDisconnect?: () => void
+  onResetAuth?: () => void
 }
 
 export function SettingsPanel({
@@ -106,6 +107,7 @@ export function SettingsPanel({
   githubToken = '',
   onGitHubChange,
   onGitHubDisconnect,
+  onResetAuth,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [ghRepo, setGhRepo] = useState(githubRepo)
@@ -159,6 +161,24 @@ export function SettingsPanel({
               <KrField label={n2} value={settings.initialBufferAnna} onChange={setNum('initialBufferAnna')} />
             </div>
           </div>
+
+          {/* Security (auth mode) */}
+          {onResetAuth && (
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Säkerhet</p>
+              <div className="flex items-center justify-between text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 mb-2">
+                <span>Datarepo</span>
+                <span className="font-mono text-gray-700">{githubRepo}</span>
+              </div>
+              <button
+                type="button"
+                onClick={onResetAuth}
+                className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+              >
+                Återställ säkerhetsinställningar…
+              </button>
+            </div>
+          )}
 
           {/* GitHub Sync */}
           {onGitHubChange && (
