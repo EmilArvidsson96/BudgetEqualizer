@@ -9,14 +9,8 @@ import {
   prevBufferFor,
   calcNewBuffer,
 } from './utils/calculations'
-import {
-  buildApi,
-  getGitHubConfig,
-  setGitHubConfig,
-  clearGitHubConfig,
-  DataApi,
-  DatasetMeta,
-} from './utils/dataApi'
+import { buildApi, DataApi, DatasetMeta } from './utils/dataApi'
+import { isAuthSetup, getLegacyConfig } from './utils/authStore'
 import { withDefaults, loadData } from './utils/storage'
 import { MonthNav } from './components/MonthNav'
 import { PersonCard } from './components/PersonCard'
@@ -27,19 +21,70 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { InstructionsPanel } from './components/InstructionsPanel'
 import { DatasetPanel } from './components/DatasetPanel'
 import { GitHubSetup } from './components/GitHubSetup'
+import { LockScreen } from './components/LockScreen'
+import { SecuritySetup } from './components/SecuritySetup'
 
 const LAST_DATASET_KEY = 'budget-last-dataset'
 const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname)
 
+// ── Auth state machine ────────────────────────────────────────────────────────
+
+type AuthPhase =
+  | { phase: 'github-setup' }
+  | { phase: 'security-setup'; repo: string; token: string }
+  | { phase: 'locked' }
+  | { phase: 'unlocked'; repo: string; token: string }
+
+function initialPhase(): AuthPhase {
+  if (isLocal) return { phase: 'unlocked', repo: '', token: '' }
+  if (isAuthSetup()) return { phase: 'locked' }
+  const legacy = getLegacyConfig()
+  if (legacy) return { phase: 'security-setup', ...legacy }
+  return { phase: 'github-setup' }
+}
+
+// ── Root component ────────────────────────────────────────────────────────────
+
 export default function App() {
-  // GitHub config — read once at mount (page reloads on change)
-  const [{ repo: ghRepo, token: ghToken }] = useState(getGitHubConfig)
-  const isGitHub = !!(ghRepo && ghToken)
-  const needsSetup = !isLocal && !isGitHub
+  const [auth, setAuth] = useState<AuthPhase>(initialPhase)
 
-  const [api] = useState<DataApi>(() => buildApi().api)
+  if (auth.phase === 'github-setup') {
+    return (
+      <GitHubSetup
+        onConnect={(repo, token) => setAuth({ phase: 'security-setup', repo, token })}
+      />
+    )
+  }
 
-  const [loading, setLoading] = useState(!needsSetup)
+  if (auth.phase === 'security-setup') {
+    return (
+      <SecuritySetup
+        repo={auth.repo}
+        token={auth.token}
+        onDone={(repo, token) => setAuth({ phase: 'unlocked', repo, token })}
+      />
+    )
+  }
+
+  if (auth.phase === 'locked') {
+    return (
+      <LockScreen
+        onUnlock={(repo, token) => setAuth({ phase: 'unlocked', repo, token })}
+      />
+    )
+  }
+
+  return <BudgetApp repo={auth.repo} token={auth.token} />
+}
+
+// ── Budget app (rendered only after auth) ────────────────────────────────────
+
+function BudgetApp({ repo, token }: { repo: string; token: string }) {
+  const isGitHub = !!(repo && token)
+
+  const [api] = useState<DataApi>(() => buildApi(repo, token).api)
+
+  const [loading, setLoading] = useState(true)
   const [datasets, setDatasets] = useState<DatasetMeta[]>([])
   const [currentName, setCurrentName] = useState('')
   const [activeMonth, setActiveMonth] = useState(currentMonthKey)
@@ -97,9 +142,7 @@ export default function App() {
     setLoading(false)
   }, [api, replaceData])
 
-  useEffect(() => {
-    if (!needsSetup) initApp()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { initApp() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshDatasets = useCallback(async () => {
     setDatasets(await api.listDatasets())
@@ -145,16 +188,6 @@ export default function App() {
     await refreshDatasets()
   }, [api, replaceData, refreshDatasets])
 
-  // ── GitHub config changes ────────────────────────────────────────────────────
-  const handleGitHubChange = (repo: string, token: string) => {
-    setGitHubConfig(repo, token)
-    window.location.reload()
-  }
-  const handleGitHubDisconnect = () => {
-    clearGitHubConfig()
-    window.location.reload()
-  }
-
   // ── Calculations ─────────────────────────────────────────────────────────────
   const month = data.months[activeMonth] ?? DEFAULT_MONTH
   const months = displayedMonths(data.months, activeMonth)
@@ -173,11 +206,6 @@ export default function App() {
     bufferAnna: month.bufferAnnaOverride !== null ? month.bufferAnnaOverride : autoPrevBuffer.bufferAnna,
   }
   const newBuffer = calcNewBuffer(month, prevBuffer)
-
-  // ── Render ───────────────────────────────────────────────────────────────────
-  if (needsSetup) {
-    return <GitHubSetup onConnect={handleGitHubChange} />
-  }
 
   if (loading) {
     return (
@@ -239,10 +267,9 @@ export default function App() {
         <SettingsPanel
           settings={data.settings}
           onChange={setSettings}
-          githubRepo={ghRepo}
-          githubToken={ghToken}
-          onGitHubChange={handleGitHubChange}
-          onGitHubDisconnect={isLocal ? handleGitHubDisconnect : undefined}
+          githubRepo={isLocal ? repo : undefined}
+          githubToken={isLocal ? token : undefined}
+          onGitHubDisconnect={isLocal ? () => { window.location.reload() } : undefined}
         />
       </div>
     </div>

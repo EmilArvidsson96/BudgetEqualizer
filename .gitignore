@@ -2,3 +2,5 @@ node_modules/
 dist/
 .DS_Store
 *.local
+# Budget data files belong in a separate private repo, not here
+data/*.json

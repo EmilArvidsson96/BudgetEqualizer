@@ -140,28 +140,7 @@ export function createGitHubApi(repo: string, token: string): DataApi {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const GH_REPO_KEY = 'budget-github-repo'
-const GH_TOKEN_KEY = 'budget-github-token'
-
-export function getGitHubConfig() {
-  return {
-    repo: localStorage.getItem(GH_REPO_KEY) ?? '',
-    token: localStorage.getItem(GH_TOKEN_KEY) ?? '',
-  }
-}
-
-export function setGitHubConfig(repo: string, token: string) {
-  localStorage.setItem(GH_REPO_KEY, repo)
-  localStorage.setItem(GH_TOKEN_KEY, token)
-}
-
-export function clearGitHubConfig() {
-  localStorage.removeItem(GH_REPO_KEY)
-  localStorage.removeItem(GH_TOKEN_KEY)
-}
-
-export function buildApi(): { api: DataApi; isGitHub: boolean } {
-  const { repo, token } = getGitHubConfig()
+export function buildApi(repo = '', token = ''): { api: DataApi; isGitHub: boolean } {
   if (repo && token) return { api: createGitHubApi(repo, token), isGitHub: true }
   return { api: createLocalApi(), isGitHub: false }
 }
