@@ -7,23 +7,20 @@ interface Props {
 
 export function LockScreen({ onUnlock }: Props) {
   const [pin, setPin] = useState('')
-  const [totp, setTotp] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const canSubmit = pin.length > 0 && totp.replace(/\s/g, '').length === 6
-
   const handleSubmit = async () => {
-    if (!canSubmit) return
+    if (!pin) return
     setLoading(true)
     setError('')
-    const result = await unlock(pin, totp)
+    const result = await unlock(pin)
     setLoading(false)
     if (result) {
       onUnlock(result.repo, result.token)
     } else {
-      setError('Fel PIN-kod eller engångskod.')
-      setTotp('')
+      setError('Fel PIN-kod.')
+      setPin('')
     }
   }
 
@@ -33,42 +30,22 @@ export function LockScreen({ onUnlock }: Props) {
         <div>
           <h1 className="text-lg font-semibold text-gray-800 mb-1">Lås upp</h1>
           <p className="text-sm text-gray-500">
-            Ange PIN-kod och engångskod för att fortsätta.
+            Ange PIN-kod för att fortsätta.
           </p>
         </div>
 
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">PIN-kod</label>
-            <input
-              type="password"
-              inputMode="numeric"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              autoFocus
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg
-                focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Engångskod (MFA)
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={totp}
-              onChange={(e) => setTotp(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              placeholder="000 000"
-              maxLength={7}
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg
-                focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100
-                transition-colors tracking-widest text-center"
-            />
-          </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">PIN-kod</label>
+          <input
+            type="password"
+            inputMode="numeric"
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+            autoFocus
+            className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg
+              focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-colors"
+          />
         </div>
 
         {error && (
@@ -77,7 +54,7 @@ export function LockScreen({ onUnlock }: Props) {
 
         <button
           type="button"
-          disabled={loading || !canSubmit}
+          disabled={loading || !pin}
           onClick={handleSubmit}
           className="w-full py-2.5 text-sm font-medium bg-blue-600 text-white rounded-xl
             hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

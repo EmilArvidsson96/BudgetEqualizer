@@ -85,6 +85,7 @@ function BudgetApp({ repo, token }: { repo: string; token: string }) {
   const [api] = useState<DataApi>(() => buildApi(repo, token).api)
 
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [datasets, setDatasets] = useState<DatasetMeta[]>([])
   const [currentName, setCurrentName] = useState('')
   const [activeMonth, setActiveMonth] = useState(currentMonthKey)
@@ -119,27 +120,36 @@ function BudgetApp({ repo, token }: { repo: string; token: string }) {
   // ── Bootstrap ────────────────────────────────────────────────────────────────
   const initApp = useCallback(async () => {
     setLoading(true)
-    let list = await api.listDatasets()
+    setLoadError('')
+    try {
+      let list = await api.listDatasets()
 
-    if (list.length === 0) {
-      // First run: migrate localStorage data (if any)
-      const legacy = loadData()
-      const defaultName =
-        legacy.settings.nameEmil && legacy.settings.nameAnna
-          ? `${legacy.settings.nameEmil} och ${legacy.settings.nameAnna}`
-          : 'Min budget'
-      await api.saveDataset(defaultName, legacy)
-      list = await api.listDatasets()
+      if (list.length === 0) {
+        // First run: migrate localStorage data (if any)
+        const legacy = loadData()
+        const defaultName =
+          legacy.settings.nameEmil && legacy.settings.nameAnna
+            ? `${legacy.settings.nameEmil} och ${legacy.settings.nameAnna}`
+            : 'Min budget'
+        await api.saveDataset(defaultName, legacy)
+        list = await api.listDatasets()
+        // If listing still returns empty after a successful save, fall back to
+        // the name we just wrote so we don't crash on list[0].
+        if (list.length === 0) list = [{ name: defaultName, lastModified: 0 }]
+      }
+
+      const lastUsed = localStorage.getItem(LAST_DATASET_KEY) ?? ''
+      const activeName = list.find((d) => d.name === lastUsed) ? lastUsed : list[0].name
+
+      const loaded = await api.loadDataset(activeName)
+      replaceData(withDefaults(loaded ?? {}))
+      setCurrentName(activeName)
+      setDatasets(list)
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Något gick fel vid laddningen.')
+    } finally {
+      setLoading(false)
     }
-
-    const lastUsed = localStorage.getItem(LAST_DATASET_KEY) ?? ''
-    const activeName = list.find((d) => d.name === lastUsed) ? lastUsed : list[0].name
-
-    const loaded = await api.loadDataset(activeName)
-    replaceData(withDefaults(loaded ?? {}))
-    setCurrentName(activeName)
-    setDatasets(list)
-    setLoading(false)
   }, [api, replaceData])
 
   useEffect(() => { initApp() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -211,6 +221,38 @@ function BudgetApp({ repo, token }: { repo: string; token: string }) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <p className="text-sm text-gray-400">Laddar…</p>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 w-full max-w-sm space-y-4">
+          <div>
+            <h1 className="text-lg font-semibold text-gray-800 mb-1">Kunde inte ladda data</h1>
+            <p className="text-sm text-gray-500">{loadError}</p>
+          </div>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={initApp}
+              className="w-full py-2.5 text-sm font-medium bg-blue-600 text-white rounded-xl
+                hover:bg-blue-700 transition-colors"
+            >
+              Försök igen
+            </button>
+            {!isLocal && (
+              <button
+                type="button"
+                onClick={() => { clearAuth(); window.location.reload() }}
+                className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                Återställ inloggning
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     )
   }
