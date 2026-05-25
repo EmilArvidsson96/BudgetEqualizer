@@ -29,9 +29,16 @@ export function GitHubSetup({ onConnect }: Props) {
       if (res.status === 401) throw new Error('Ogiltigt token — kontrollera att det inte har löpt ut.')
       if (res.status === 404) throw new Error('Repository hittades inte — kontrollera stavning och att tokenet har åtkomst.')
       if (!res.ok) throw new Error(`Oväntat fel (${res.status})`)
-      const repoData = await res.json() as { permissions?: { push?: boolean } }
-      if (repoData.permissions != null && !repoData.permissions.push) {
-        throw new Error('Tokenet saknar skrivbehörighet. Kontrollera att "Contents: Read and write" är valt.')
+      await res.json() // consume body
+
+      // Verify Contents access by probing the repo root.
+      // 403 = token missing Contents permission entirely.
+      // 409 = empty repo (no commits yet) — allowed, we'll create the first file.
+      const contentsRes = await fetch(`https://api.github.com/repos/${r}/contents/`, {
+        headers: { Authorization: `Bearer ${t}`, Accept: 'application/vnd.github+json' },
+      })
+      if (contentsRes.status === 403) {
+        throw new Error('Tokenet saknar behörighet att läsa/skriva filer. Kontrollera att "Contents: Read and write" är valt under Permissions.')
       }
       onConnect(r, t)
     } catch (e) {
