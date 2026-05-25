@@ -89,7 +89,11 @@ export function createGitHubApi(repo: string, token: string): DataApi {
   return {
     async listDatasets() {
       const res = await ghFetch(repo, token, dir)
-      if (!res.ok) return []
+      if (res.status === 404) return []  // directory doesn't exist yet — first run
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(`GitHub: ${(err as { message?: string }).message ?? res.status}`)
+      }
       const files: Array<{ name: string; type: string }> = await res.json()
       return files
         .filter((f) => f.type === 'file' && f.name.endsWith('.json'))

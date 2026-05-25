@@ -29,6 +29,10 @@ export function GitHubSetup({ onConnect }: Props) {
       if (res.status === 401) throw new Error('Ogiltigt token — kontrollera att det inte har löpt ut.')
       if (res.status === 404) throw new Error('Repository hittades inte — kontrollera stavning och att tokenet har åtkomst.')
       if (!res.ok) throw new Error(`Oväntat fel (${res.status})`)
+      const repoData = await res.json() as { permissions?: { push?: boolean } }
+      if (repoData.permissions && !repoData.permissions.push) {
+        throw new Error('Tokenet saknar skrivbehörighet. Kontrollera att "Contents: Read and write" är valt.')
+      }
       onConnect(r, t)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Anslutning misslyckades')
