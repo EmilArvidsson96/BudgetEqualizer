@@ -12,7 +12,7 @@ import {
 import { buildApi, DataApi, DatasetMeta } from './utils/dataApi'
 import { isAuthSetup, getLegacyConfig, clearAuth } from './utils/authStore'
 import { withDefaults, loadData } from './utils/storage'
-import { ZlantarPayload, matchPerson, snapshotFromZlantar } from './utils/zlantar'
+import { ZlantarPayload, matchPerson, snapshotFromZlantar, sharedAccountNumbers } from './utils/zlantar'
 import { MonthNav } from './components/MonthNav'
 import { PersonCard } from './components/PersonCard'
 import { ResultCard } from './components/ResultCard'
@@ -21,6 +21,7 @@ import { ConsumptionChart } from './components/ConsumptionChart'
 import { SettingsPanel } from './components/SettingsPanel'
 import { InstructionsPanel } from './components/InstructionsPanel'
 import { DatasetPanel } from './components/DatasetPanel'
+import { SharedAccountsCard } from './components/SharedAccountsCard'
 import { GitHubSetup } from './components/GitHubSetup'
 import { LockScreen } from './components/LockScreen'
 import { SecuritySetup } from './components/SecuritySetup'
@@ -222,6 +223,7 @@ function BudgetApp({ repo, token }: { repo: string; token: string }) {
 
   const emilKvar = calcKvar(month.emil)
   const annaKvar = calcKvar(month.anna)
+  const sharedNumbers = sharedAccountNumbers(data.zlantar.emil, data.zlantar.anna)
   const egenkonsumtion = calcEgenkonsumtion(month, prevMonthData ?? null)
   const consumption = calcConsumptionBreakdown(month, emilKvar, annaKvar, egenkonsumtion)
 
@@ -295,6 +297,7 @@ function BudgetApp({ repo, token }: { repo: string; token: string }) {
             name={data.settings.nameEmil}
             data={month.emil}
             zlantar={data.zlantar.emil}
+            excludeAccountNumbers={sharedNumbers}
             onChange={(p) => setPersonData(activeMonth, 'emil', p)}
             onClearZlantar={() => setZlantar('emil', null)}
           />
@@ -302,10 +305,19 @@ function BudgetApp({ repo, token }: { repo: string; token: string }) {
             name={data.settings.nameAnna}
             data={month.anna}
             zlantar={data.zlantar.anna}
+            excludeAccountNumbers={sharedNumbers}
             onChange={(p) => setPersonData(activeMonth, 'anna', p)}
             onClearZlantar={() => setZlantar('anna', null)}
           />
         </div>
+
+        <SharedAccountsCard
+          sharedNumbers={sharedNumbers}
+          snapshotEmil={data.zlantar.emil}
+          snapshotAnna={data.zlantar.anna}
+          nameEmil={data.settings.nameEmil}
+          nameAnna={data.settings.nameAnna}
+        />
 
         <ResultCard
           emilKvar={emilKvar}

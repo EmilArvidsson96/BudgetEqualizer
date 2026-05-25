@@ -8,11 +8,12 @@ interface Props {
   name: string
   data: PersonData
   zlantar?: ZlantarSnapshot | null
+  excludeAccountNumbers?: Set<string>
   onChange: (d: PersonData) => void
   onClearZlantar?: () => void
 }
 
-export function PersonCard({ name, data, zlantar, onChange, onClearZlantar }: Props) {
+export function PersonCard({ name, data, zlantar, excludeAccountNumbers, onChange, onClearZlantar }: Props) {
   const set =
     (k: keyof PersonData) =>
     (v: string) =>
@@ -115,7 +116,7 @@ export function PersonCard({ name, data, zlantar, onChange, onClearZlantar }: Pr
       </CollapsibleSection>
 
       {zlantar && zlantar.banks.length > 0 && (
-        <ZlantarAccounts snapshot={zlantar} onClear={onClearZlantar} />
+        <ZlantarAccounts snapshot={zlantar} exclude={excludeAccountNumbers} onClear={onClearZlantar} />
       )}
     </div>
   )
@@ -123,12 +124,21 @@ export function PersonCard({ name, data, zlantar, onChange, onClearZlantar }: Pr
 
 function ZlantarAccounts({
   snapshot,
+  exclude,
   onClear,
 }: {
   snapshot: ZlantarSnapshot
+  exclude?: Set<string>
   onClear?: () => void
 }) {
-  const total = snapshot.banks.reduce(
+  const visibleBanks = snapshot.banks
+    .map((bank) => ({
+      ...bank,
+      accounts: bank.accounts.filter((acc) => !exclude?.has(acc.account_number)),
+    }))
+    .filter((bank) => bank.accounts.length > 0)
+
+  const total = visibleBanks.reduce(
     (s, b) => s + b.accounts.reduce((bs, a) => bs + a.balance, 0),
     0,
   )
@@ -136,6 +146,8 @@ function ZlantarAccounts({
     try { return new Date(snapshot.importedAt).toLocaleDateString('sv-SE') }
     catch { return '' }
   })()
+
+  if (visibleBanks.length === 0) return null
 
   return (
     <CollapsibleSection
@@ -145,7 +157,7 @@ function ZlantarAccounts({
       badgeColor={total >= 0 ? 'text-gray-500' : 'text-red-500'}
     >
       <div className="space-y-3">
-        {snapshot.banks.map((bank) => (
+        {visibleBanks.map((bank) => (
           <div key={bank.name} className="space-y-1">
             <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
               {prettyBankName(bank.name)}

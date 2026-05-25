@@ -69,3 +69,19 @@ export function translateAccountType(type: string): string {
     default: return type
   }
 }
+
+/** Account numbers that appear in both snapshots. */
+export function sharedAccountNumbers(
+  a: ZlantarSnapshot | null,
+  b: ZlantarSnapshot | null,
+): Set<string> {
+  if (!a || !b) return new Set()
+  const numbersA = new Set(a.banks.flatMap((bank) => bank.accounts.map((acc) => acc.account_number)))
+  const result = new Set<string>()
+  for (const bank of b.banks) {
+    for (const acc of bank.accounts) {
+      if (numbersA.has(acc.account_number)) result.add(acc.account_number)
+    }
+  }
+  return result
+}
