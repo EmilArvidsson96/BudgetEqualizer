@@ -1,4 +1,4 @@
-import { StoredData, DEFAULT_SETTINGS, DEFAULT_INSTRUCTIONS } from '../types'
+import { StoredData, DEFAULT_SETTINGS, DEFAULT_INSTRUCTIONS, DEFAULT_ZLANTAR } from '../types'
 
 const KEY = 'budget-v2'
 const OLD_KEY = 'budget-state'
@@ -8,6 +8,7 @@ export function withDefaults(data: Partial<StoredData>): StoredData {
     months: data.months ?? {},
     settings: { ...DEFAULT_SETTINGS, ...(data.settings ?? {}) },
     instructions: data.instructions ?? [...DEFAULT_INSTRUCTIONS],
+    zlantar: { ...DEFAULT_ZLANTAR, ...(data.zlantar ?? {}) },
   }
 }
 

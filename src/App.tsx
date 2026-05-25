@@ -12,6 +12,7 @@ import {
 import { buildApi, DataApi, DatasetMeta } from './utils/dataApi'
 import { isAuthSetup, getLegacyConfig, clearAuth } from './utils/authStore'
 import { withDefaults, loadData } from './utils/storage'
+import { ZlantarPayload, matchPerson, snapshotFromZlantar } from './utils/zlantar'
 import { MonthNav } from './components/MonthNav'
 import { PersonCard } from './components/PersonCard'
 import { ResultCard } from './components/ResultCard'
@@ -101,7 +102,7 @@ function BudgetApp({ repo, token }: { repo: string; token: string }) {
     if (name) await api.saveDataset(name, d)
   }, [api])
 
-  const { data, setPersonData, setBufferOverride, setSettings, setInstructions, replaceData } =
+  const { data, setPersonData, setBufferOverride, setSettings, setInstructions, setZlantar, replaceData } =
     useStorage(withDefaults({}), handleSave, saveDelay)
 
   // Save immediately when page goes to background (critical for mobile)
@@ -198,6 +199,20 @@ function BudgetApp({ repo, token }: { repo: string; token: string }) {
     await refreshDatasets()
   }, [api, replaceData, refreshDatasets])
 
+  const handleZlantarImport = useCallback(async (payload: ZlantarPayload) => {
+    const settings = dataRef.current.settings
+    let person = matchPerson(payload, settings)
+    if (!person) {
+      const fullName = `${payload.user.first_name ?? ''} ${payload.user.last_name ?? ''}`.trim()
+      const useAnna = window.confirm(
+        `Kunde inte automatiskt matcha Zlantar-data för ${fullName || 'denna användare'}.\n\n` +
+        `OK = importera till ${settings.nameAnna}\nAvbryt = importera till ${settings.nameEmil}`,
+      )
+      person = useAnna ? 'anna' : 'emil'
+    }
+    setZlantar(person, snapshotFromZlantar(payload))
+  }, [setZlantar])
+
   // ── Calculations ─────────────────────────────────────────────────────────────
   const month = data.months[activeMonth] ?? DEFAULT_MONTH
   const months = displayedMonths(data.months, activeMonth)
@@ -270,6 +285,7 @@ function BudgetApp({ repo, token }: { repo: string; token: string }) {
           onCreate={createDataset}
           onDelete={handleDelete}
           onImport={handleImport}
+          onZlantarImport={handleZlantarImport}
         />
 
         <InstructionsPanel instructions={data.instructions} onChange={setInstructions} />
@@ -278,12 +294,16 @@ function BudgetApp({ repo, token }: { repo: string; token: string }) {
           <PersonCard
             name={data.settings.nameEmil}
             data={month.emil}
+            zlantar={data.zlantar.emil}
             onChange={(p) => setPersonData(activeMonth, 'emil', p)}
+            onClearZlantar={() => setZlantar('emil', null)}
           />
           <PersonCard
             name={data.settings.nameAnna}
             data={month.anna}
+            zlantar={data.zlantar.anna}
             onChange={(p) => setPersonData(activeMonth, 'anna', p)}
+            onClearZlantar={() => setZlantar('anna', null)}
           />
         </div>
 

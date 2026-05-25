@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { StoredData } from '../types'
 import { DatasetMeta } from '../utils/dataApi'
 import { withDefaults } from '../utils/storage'
+import { ZlantarPayload, isZlantarPayload } from '../utils/zlantar'
 
 interface Props {
   datasets: DatasetMeta[]
@@ -11,6 +12,7 @@ interface Props {
   onCreate: (name: string) => Promise<void>
   onDelete: (name: string) => Promise<void>
   onImport: (name: string, data: StoredData) => Promise<void>
+  onZlantarImport: (payload: ZlantarPayload) => Promise<void>
 }
 
 export function DatasetPanel({
@@ -21,6 +23,7 @@ export function DatasetPanel({
   onCreate,
   onDelete,
   onImport,
+  onZlantarImport,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
@@ -76,8 +79,12 @@ export function DatasetPanel({
     const reader = new FileReader()
     reader.onload = (ev) => {
       try {
-        const parsed = withDefaults(JSON.parse(ev.target?.result as string))
-        wrap(() => onImport(name, parsed))
+        const parsed = JSON.parse(ev.target?.result as string)
+        if (isZlantarPayload(parsed)) {
+          wrap(() => onZlantarImport(parsed))
+        } else {
+          wrap(() => onImport(name, withDefaults(parsed)))
+        }
       } catch {
         alert('Kunde inte läsa filen. Kontrollera att det är en giltig JSON-fil.')
       }

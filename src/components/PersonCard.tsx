@@ -1,15 +1,18 @@
-import { PersonData } from '../types'
+import { PersonData, ZlantarSnapshot } from '../types'
 import { evalExpr, formatKr } from '../utils/math'
+import { prettyBankName, translateAccountType } from '../utils/zlantar'
 import { Field } from './Field'
 import { CollapsibleSection } from './CollapsibleSection'
 
 interface Props {
   name: string
   data: PersonData
+  zlantar?: ZlantarSnapshot | null
   onChange: (d: PersonData) => void
+  onClearZlantar?: () => void
 }
 
-export function PersonCard({ name, data, onChange }: Props) {
+export function PersonCard({ name, data, zlantar, onChange, onClearZlantar }: Props) {
   const set =
     (k: keyof PersonData) =>
     (v: string) =>
@@ -110,6 +113,81 @@ export function PersonCard({ name, data, onChange }: Props) {
           hint="Återförs till bufferten"
         />
       </CollapsibleSection>
+
+      {zlantar && zlantar.banks.length > 0 && (
+        <ZlantarAccounts snapshot={zlantar} onClear={onClearZlantar} />
+      )}
     </div>
+  )
+}
+
+function ZlantarAccounts({
+  snapshot,
+  onClear,
+}: {
+  snapshot: ZlantarSnapshot
+  onClear?: () => void
+}) {
+  const total = snapshot.banks.reduce(
+    (s, b) => s + b.accounts.reduce((bs, a) => bs + a.balance, 0),
+    0,
+  )
+  const importedDate = (() => {
+    try { return new Date(snapshot.importedAt).toLocaleDateString('sv-SE') }
+    catch { return '' }
+  })()
+
+  return (
+    <CollapsibleSection
+      title="Konton"
+      defaultOpen
+      badge={formatKr(total)}
+      badgeColor={total >= 0 ? 'text-gray-500' : 'text-red-500'}
+    >
+      <div className="space-y-3">
+        {snapshot.banks.map((bank) => (
+          <div key={bank.name} className="space-y-1">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
+              {prettyBankName(bank.name)}
+            </div>
+            {bank.accounts.map((acc) => (
+              <div
+                key={acc.account_number || `${acc.name}-${acc.account_index}`}
+                className="flex items-baseline justify-between gap-2 text-xs"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-gray-700 truncate">{acc.name}</div>
+                  <div className="text-[10px] text-gray-400 truncate">
+                    {translateAccountType(acc.type)} · {acc.account_number}
+                  </div>
+                </div>
+                <div
+                  className={`tabular-nums ${
+                    acc.balance < 0 ? 'text-red-500' : 'text-gray-700'
+                  }`}
+                >
+                  {formatKr(acc.balance)}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+
+        <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+          <span className="text-[10px] text-gray-400">
+            {importedDate ? `Importerad ${importedDate}` : ''}
+          </span>
+          {onClear && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="text-[10px] text-gray-300 hover:text-red-400 transition-colors"
+            >
+              Ta bort
+            </button>
+          )}
+        </div>
+      </div>
+    </CollapsibleSection>
   )
 }

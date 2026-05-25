@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { StoredData, MonthData, PersonData, Settings, DEFAULT_MONTH } from '../types'
+import { StoredData, MonthData, PersonData, Settings, ZlantarSnapshot, DEFAULT_MONTH } from '../types'
 
 export function useStorage(
   initialData: StoredData,
@@ -65,11 +65,20 @@ export function useStorage(
     [setData],
   )
 
+  const setZlantar = useCallback(
+    (person: 'emil' | 'anna', snapshot: ZlantarSnapshot | null) =>
+      setData((prev) => ({
+        ...prev,
+        zlantar: { ...prev.zlantar, [person]: snapshot },
+      })),
+    [setData],
+  )
+
   /** Replace all data immediately (used when switching datasets). */
   const replaceData = useCallback((newData: StoredData) => {
     clearTimeout(saveTimer.current)
     setDataRaw(newData)
   }, [])
 
-  return { data, setPersonData, setBufferOverride, setSettings, setInstructions, replaceData }
+  return { data, setPersonData, setBufferOverride, setSettings, setInstructions, setZlantar, replaceData }
 }
